@@ -1,0 +1,509 @@
+---
+title: "Final_Sumin Oh"
+author: "Sumin Oh"
+date: "2024-12-09"
+output: html_document
+---
+
+## 1. Import Data
+```{r}
+library(fpp2)
+library(fpp)
+library(readr)
+library(readxl)
+library(forecast)
+library(ggplot2)
+
+carsls = read.csv("https://raw.githubusercontent.com/su-min-oh/Final-Exam/main/TOTALSA.csv")
+
+#make it a time series data
+carsls_ts = ts(carsls$Sales.Units.in.Millions.,start=c(2019,1),frequency=12)
+
+```
+
+## 2. Plot and Inference
+```{r}
+plot(carsls_ts)
+carsls_sub = window(carsls_ts,start=2022)
+plot(carsls_sub)
+```
+
+#### Observation Summary
+The data is about the car sales from Jan 2019 to Feb 2024. The plot shows the drastic drop in 2020, and this is assumed to be due to outbreak of Covid. Since the graph has big changes, I cut the data from 2022 to do the further forecast. From the cut graph, I see there is a gradually increasing trend, but it needs further analysis to decide on that.
+
+
+## 3. Central Tendancy
+```{r}
+#Min, max, mean, median, 1st and 3rd Quartile values
+summary(carsls_ts)
+summary(carsls_sub)
+#boxplot
+boxplot(carsls_ts)
+boxplot(carsls_sub)
+```
+
+#### Observation Summary (for the whole data)
+1) The maximum value is 18M, while minimum is only around 8M.
+2) Mean is almost as same as Median, meaning that the data is not skewed to one side.
+3) Considering that 3rd quartile is 16M and 1st quartile is 14M, IQR is 2M 
+4) By looking at the boxplot, I could find out an outlier.
+
+#### Observation Summary (for the subset data)
+1) The maximum value is 16M, while minimum is only around 13M.
+2) Like in the whole data, Mean is almost as same as Median, meaning that the data is not skewed to one side.
+3) Considering that 3rd quartile is 16M and 1st quartile is 14M, IQR is 2M. This is similar with the whole data. 
+4) Boxplot showed different figure with the one made from the whole data. There were no outliers detected. So I'm confident to utilize this subset of data to forecast from now.
+
+## 4. Decomposition
+```{r}
+carsls_decomp = decompose(carsls_sub)
+carsls_decomp
+plot(carsls_decomp)
+```
+
+- Is the time series seasonal? : From the decomposition plot, I could find some seasonality, but it's not very obvious.
+- The decomposition is "Additive". the decompose() function automatically decided whether to choose additive or multiplicative. The fact that it chose additive means that this data changes in regular pattern and volatility is constant.
+
+- Seasonal indices : can be found in above, in $figure.
+
+- The lowest month : December / The highest month : April. To assume the reason behind this indices, as this is the data of car sales, in April, the weather starts to get warmer, so many people might plan for the trip and naturally might think of change or buy a car. On the other hand, in December, it gets colder and the holiday begins. People might want to stay home with family in this season.
+
+```{r}
+# Plot for time series adjusted for seasonality
+carsls_seasadj = seasadj(carsls_decomp)
+plot(carsls_sub)
+lines(carsls_seasadj,col="red")
+```
+
+- I can see there is a considerable gap between the actual time series and the seasonally adjusted time series line, which indicates that seasonality has a substantial impact on the time series. For now, I can conclude that this data has high seasonality.
+
+
+## 5. Naive Method
+```{r}
+#Output
+carsls_naive = naive(carsls_sub)
+
+#Residual Analysis
+naive_res = residuals(carsls_naive)
+
+#Plot of residuals
+plot(naive_res)
+abline(h=0, col="red")
+```
+
+- Plot shows that residuals are not distributed around 0, suggesting that accuracy of this method could be really low. 
+
+```{r}
+#Histogram of Residuals
+hist(naive_res)
+```
+
+- The histogram shows that the residuals are quite normally distributed, and it indicates that the model's prediction error is not biased in any particular direction.
+
+```{r}
+#Plot of fitted vs. residuals
+naive_fit = fitted(carsls_naive)
+ggplot(data = data.frame(naive_fit, naive_res), aes(x = naive_fit, y = naive_res)) +
+  geom_point(shape = 1) + geom_hline(yintercept = 0,color="red")
+```
+
+- Even though the residuals are not located around 0, I see no pattern in here, which means that the model predicts quite well.
+
+```{r}
+#Plot of actual vs. residuals
+plot(as.numeric(carsls_sub),naive_res, xlab="actual",ylab="residuals")
+abline(h=0,col="red")
+```
+
+- This shows that there is no pattern of residuals, which is a good sign. However, the residuals are not really distributed around 0.
+
+```{r}
+#Acf
+plot(Acf(naive_res))
+```
+
+- At some lags, the ACF the confidence interval, for example, at lags 1 and 3. This suggests that there are correlations between residuals at these lags, but still, this pattern seems not bad since there are only 2, we can assume that this model predicts not bad.
+
+```{r}
+#Measures of accuracy
+accuracy(carsls_naive)
+#Forecast for next year (table, plot)
+naive_fc = naive(carsls_sub,h=12)
+naive_fc
+plot(naive_fc)
+```
+
+#### Summary of this forecasting technique
+
+- How good is the accuracy? : For now, it's hard to measure it's accuracy since I haven't done the accuracy test for other forecast models. Just to assume with the values of MAPE, the absolute percentage error is only about 3%, which is very low, so this method can be accurate. But still, it needs to be compared with other models later on.
+
+- Predicted value : It predicts the value for next 12months for 16.191, uniformly, as it predicts based on the data from the last period.
+
+
+
+## 6. Simple Moving Averages
+```{r}
+MA3 = ma(carsls_sub, order=3)
+MA6 = ma(carsls_sub, order=6)
+MA9 = ma(carsls_sub, order=9)
+
+plot(carsls_sub)
+lines(MA3,col="red")
+lines(MA6,col="blue")
+lines(MA9,col="green")
+
+#Forecast for the next 12 months using the best one(bonus)
+MA3_fc = forecast(MA3, h=12)
+MA6_fc = forecast(MA6, h=12)
+MA9_fc = forecast(MA9,h=12)
+
+accuracy(MA3_fc)
+accuracy(MA6_fc)
+accuracy(MA9_fc)
+
+#I chose MA6
+
+plot(MA6_fc)
+```
+
+- Observations of plots as moving average goes up :
+In the plot, as moving average goes up, the line becomes smoother. If you see the green line, it's the smoothest one. As the period we reflect becomes larger, short term noise is mitigated and long term trend tends to be shown. Also, as the order of moving average goes up, reflection to the latest data becomes slower. So it can show the long term trend of the data better.
+
+- (bonus) : I used order 6 to forecast for next 12 month, since it had the lowest MAPE.
+
+## 7. Simple Smoothing
+```{r}
+#Simple smoothing for next 12 months
+carsls_ets = ets(carsls_sub,model="ANN")
+carsls_ets_fc = forecast(carsls_ets,h=12)
+summary(carsls_ets_fc)
+```
+- I used ets model and set the model to "ANN", which stands for additive error, no trend, no seasonality. (Simple smoothing!)
+
+- alpha is 0.5558, which is in the middle of 0 and 1. This model makes predictions by balancing recent and historical data.
+
+- The value of initial state is 14.5659, and it represents the initial value when the data starts prediction.
+
+- The value of sigma is 0.5896. It stands for the standard deviation of residuals. The smaller the value, the more accurate the prediction. value of 0.5893 seems to be small considering the values in the data.
+
+```{r}
+#Residual Analysis
+carsls_ets_res = residuals(carsls_ets_fc)
+
+#Plot of residuals
+plot(carsls_ets_res)
+abline(h=0,col="red")
+```
+
+- Similar to the ones in naive forecast, residuals are not distributed around 0. But still, considering the biggest residual is around 1.5, it's still a small value. I also don't see any pattern here.
+
+```{r}
+#Histogram
+hist(carsls_ets_res)
+```
+
+- This shows that the residuals are quite normally distributed, and it indicates that the model's prediction error is not biased in any particular direction.
+
+```{r}
+#Plot of fitted vs. residuals
+carsls_ets_fitted = fitted(carsls_ets_fc)
+ggplot(data = data.frame(fitted = carsls_ets_fitted, residuals = carsls_ets_res), 
+       aes(x = fitted, y = residuals)) + geom_point() + geom_hline(yintercept = 0, color="red")
+```
+
+- Like I observed previously, even though residuals are not distributed around 0, there is no pattern, meaning that the model predicted quite well.
+
+```{r}
+#Plot of actual vs. residuals
+plot(as.numeric(carsls_sub),carsls_ets_res, xlab="actual",ylab="residuals")
+abline(h=0,col="red")
+```
+
+- It's not that obvious but I could see some linear pattern here, that as the actual value goes up, residuals also went upside. But since this model was analyzed as quite reliable in previous questions, this pattern might not be significant.
+
+```{r}
+#Acf
+plot(Acf(carsls_ets_res))
+```
+
+- I see no lags that exceeds the confidence interval significantly. Only the lag 3 slightly exceeds, but it's negligible.
+
+```{r}
+#Measures of accuracy
+accuracy(carsls_ets_fc)
+#Forecast for next year (table, plot)
+carsls_ets_fc
+plot(carsls_ets_fc)
+```
+
+#### Summary of this forecasting technique
+- How good is the accuracy? : Considering the MAPE of naive was 3.41, accuracy of this simple smoothing method is better than Naive. Also, Root mean squared error is 0.5, which can be considered really low.   
+
+- Predicted value : By checking the table, it predicts the value of the time series to be 16.02 for the whole forecast period. The plot is similar to Naive method since it also shows the same value for the given period. It is because this model forecasts only based on the "level" of the data.
+
+
+## 8. Holt-Winters
+```{r}
+#forecast for next 12 months
+carsls_hw = hw(carsls_sub,h=12)
+summary(carsls_hw)
+```
+- Value of alpha(level): 2e-04. This real small value means that past data are much more weighted compared to recent data.
+
+- Value of beta(trend): 2e-04, which is similar to alpha. This model does not reflect drastic trend changes, but rather seeks more stable trend changes.
+
+- Value of gamma(seasonality) : 0.9997. The model puts weight to current seasonal changes than past seasonal changes.
+
+- Initial state : level=13.4 it shows the initial level of data from the starting point of the forecast / trend=0.13 In a model with a trend, this initial trend value is used to start the prediction. Here, it's not significant / seasonality= See above. Indicates the initial value corresponding to each season(month).
+
+- Value of sigma(standard deviations of error) : 1.0571. Small sigma value means that the model fits the data better, while a large sigma value means that there is greater variation between the predicted and actual values. 
+
+```{r}
+#Residual Analysis
+carsls_hw_res = residuals(carsls_hw)
+#Plot
+plot(carsls_hw_res)
+abline(h=0,col="red")
+```
+
+- The pattern is random, meaning that this model's predictions can be seen as unbiased, even though the values are not really clustered around0. However, in 2024, the residual went really high. I guess this model put so much weight on seasonality only, it failed to accurately predict current value.
+
+```{r}
+#Histogram
+hist(carsls_hw_res)
+```
+
+- This shows that the residuals are normally distributed, and it indicates that the model's prediction error is not biased in any particular direction.
+
+```{r}
+#Plot of fitted vs. residuals
+carsls_hw_fitted = fitted(carsls_hw)
+ggplot(data = data.frame(fitted = carsls_hw_fitted, residuals = carsls_hw_res), 
+       aes(x = fitted, y = residuals)) + geom_point() + geom_hline(yintercept = 0, color="red")
+```
+
+- The residuals are not evenly distributed around 0, and as fitted value goes up, residuals tend to be larger, especially above 17. I should check the accuracy measure to see what this means.
+
+```{r}
+#Plot of actual vs. residuals
+plot(as.numeric(carsls_sub),carsls_hw_res, xlab="actual",ylab="residuals")
+abline(h=0,col="red")
+```
+
+- Similar to the fitted vs. residuals plot, as the value goes up, residuals tend to increase. But still, there is no clear pattern here.
+
+```{r}
+#Acf
+plot(Acf(carsls_hw_res))
+```
+
+- No value exceeds the confidence interval. There is no autocorrelation or pattern in this residuals.
+
+```{r}
+#Measures of accuracy
+accuracy(carsls_hw)
+#Forecast for next year (table, plot)
+carsls_hw
+plot(carsls_hw)
+```
+
+#### Summary of this forecasting technique
+- How good is the accuracy? : MAPE is smaller than Naive, but larger than simple smoothing. RMSE is also larger than simple smoothing. 
+
+- Predicted time series value : can be checked in the above table. Unlike Naive or simple smoothing, it has various different values for the given period.
+
+
+
+
+## 9. ARIMA or Box-Jenkins
+```{r}
+# Is Time Series data Stationary? How did you verify?
+# How many differences are needed to make it stationary?
+# Is Seasonality component needed?
+
+tsdisplay(carsls_sub)
+ndiffs(carsls_sub)
+nsdiffs(carsls_sub)
+Acf(carsls_sub)
+
+```
+
+- The plot shows that it has some seasonality, as there are repetitive patterns.
+- ACF chart implies that the data can have seasonality, with the peaks in certain lags.
+- PACF chart shows strong correlation in lag 1, implying there could be a seasonality.
+- ndiffs function : It's not stationary, as it says it needs 1 differencing to eliminate trend.
+- nsdiffs function : It says it doesn't need differencing to eliminate seasonality. 
+- Is seasonality component needed? : In Holt-Winters, it did weighted a lot to seasonality(high Gamma value), but by doing nsdiffs function, it returned 0. It can be assumed that the data does have seasonality, but it may not be statistically strong enough to require seasonal differencing.
+
+```{r}
+#	Plot the Time Series chart of the differenced series. 
+#	Plot the ACF and PACF plots of the differenced series. 
+# Based on the ACF and PACF, which are the possible ARIMA models? 
+
+carslsdiff = diff(carsls_sub,1)
+tsdisplay(carslsdiff)
+
+```
+
+- ACF(q) : exceeds the CI on lag 1 and ends from lag2 . So "q" can be 1
+- PACF(p) : high on lag 1 goes downwards, and being significantly low at 4. So P can be 1 or 2 or 3
+- differencing = 1
+- possible arima model = arima(1,1,1) arima(2,1,1), arima(3,1,1)
+
+```{r}
+arima1 = Arima(carsls_sub, order = c(1, 1, 1))
+arima2 = Arima(carsls_sub, order = c(2, 1, 1))
+arima3 =Arima(carsls_sub, order = c(3, 1, 1))
+
+a=c(arima1$aic,arima1$bic,arima1$sigma2)
+b=c(arima2$aic,arima2$bic,arima2$sigma2)
+c=c(arima3$aic,arima3$bic,arima3$sigma2)
+
+arimas = rbind(a,b,c)
+rownames(arimas) = c("(1,1,1)","(2,1,1)","(3,1,1)")
+colnames(arimas) = c("aic","bic","sigma")
+
+arimas
+```
+
+- Based on the AIC, BIC, Sigma of the 3 models, I'll choose arima(2,1,1) model, which has the lowest values.
+
+
+```{r}
+auto.arima(carsls_sub,trace=TRUE, stepwise = FALSE)
+```
+
+- However, by using auto.arima, it automatically found the best model, which is arima(3,1,0). It has slightly higher aic, but lower bic and sigma. I assume that the auto.arima function put more weight to BIC, and smaller standard deviation of errors.
+- I will follow auto.arima's choice, so the final chosen model is arima(3,1,0)
+
+```{r}
+#Residual Analysis
+carsls_arima = auto.arima(carsls_sub,trace=TRUE, stepwise = FALSE)
+carsls_arima_res = carsls_arima$residuals
+
+#plot
+plot(carsls_arima_res)
+abline(h=0,col="red")
+```
+
+- The residuals here also are not distributed around 0, however, it has no patterns.
+
+```{r}
+#Histogram
+hist(carsls_arima_res)
+
+```
+
+- Residuals are quite normally distributed.
+
+```{r}
+#Plot of fitted vs. residuals
+carsls_arima_fitted = fitted(carsls_arima)
+ggplot(data = data.frame(fitted = carsls_arima_fitted, residuals = carsls_arima_res), 
+       aes(x = fitted, y = residuals)) + geom_point() + geom_hline(yintercept = 0, color="red")
+```
+
+- Residuals are randomly distributed without any patterns. Howeverm it seems that the larger the value, the smaller the residuals, indicating that this model has more accuracy on larger values.
+
+```{r}
+#Plot of actual vs. residuals
+plot(as.numeric(carsls_sub),carsls_arima_res, xlab="actual",ylab="residuals")
+abline(h=0,col="red")
+```
+
+- It has simliar figure with the fitted vs. residuals. There are no clear patterns, but the value of residiuals tend to get smaller when the value gets larger.
+
+```{r}
+#Acf
+plot(Acf(carsls_arima_res))
+```
+
+- No value exceeds CI, meaning that values are not correlated. It's a good sign.
+
+```{r}
+#Measures of accuracy
+accuracy(carsls_arima)
+
+#Forecast for next 1 & 2 year
+carsls_arima_fc_1Y = forecast(carsls_arima,h=12)
+carsls_arima_fc_2Y = forecast(carsls_arima,h=24)
+
+#Table and plot
+# 1Y
+carsls_arima_fc_1Y
+plot(carsls_arima_fc_1Y)
+
+# 2Y
+carsls_arima_fc_2Y
+plot(carsls_arima_fc_2Y)
+
+```
+
+- How good is the accuracy? : MAPE is 2.48, which is smaller than Naive,HW, and simple smoothing. But still bigger than simple moving average. 
+
+- Predicted time series value : can be checked in the above table & plot. It has various different values for the given period. From the 2Y plot, I could see the values become smoother as time goes.
+
+## 10. Accuracy Summary
+```{r}
+d=accuracy(carsls_naive)
+e=accuracy(MA6_fc)
+f=accuracy(carsls_ets_fc)
+g=accuracy(carsls_hw)
+h=accuracy(carsls_arima)
+
+accuracymeasure = rbind(d,e,f,g,h)
+rownames(accuracymeasure) = c("naive","MA6","Simple smoothing","HW","ARIMA")
+
+accuracymeasure
+```
+
+About the methods
+
+- Naive : This is the simplest prediction method, which uses the values of the previous time point as the predicted values for the next time point. It can be useful when the data does not have a particular trend or seasonality. It has the advantage of being able to make predictions quickly.
+
+- Moving Average : A method of forecasting using the average of data over a certain period of time. It is suitable when there is no trend and the data is relatively stable.
+
+- Simple smoothing : A method that reflects the level of the data. This model makes predictions based on recent data, but reflects only the level of the data without trends or seasonality, so useful when there is no clear trend or seasonality in the data.
+
+- Holt winters : A method that reflects level, trend, and seasonality. Suitable for time series data with clear trends and seasonality.
+
+- ARIMA : A method that combines AR(Auto regressive), I(Integrated), and MA(Moving Average). While it requires careful tuning, ARIMA provides accurate forecasts for a wide range of time series data.
+
+Best and worst method for each accuracy measure.
+
+- ME (Mean Error) : This measures the overall direction of the forecast, so not suitable to evaluate the accuracy of the prediction. HW overestimates the data, and simple smoothing underestimates the value the most.
+
+- RMSE (Root mean squire error) : Best is Moving average and worst is Holt-Winters. RMSE is a good indicator of prediction accuracy because it is more sensitive to large errors. MA6 has the smallest RMSE and is evaluated as the most accurate model.
+
+- MAE(Mean Absolute Error) : This method gives equal importance to all errors, and the smaller the error, the more accurate it is. Best is Moving average and Worst is Naive method. 
+
+- MPE(Mean Percentage Error) : This method allows us to determine the relative error. Moving average has the smallest value, indicating that it underestimates by 0.02%. Holt-winters is overestimating the value by 0.15%. 
+
+- MAPE(Mean Absolute Percentage Error) : This shows errors as absolute percentages. Moving average is the best, while Naive is the worst with the largest value.
+
+- MASE (Mean Absolute Scaled Error) : Best is Moving average, worst is Naive.
+
+- ACF1 : ARIMA is evaluated as the best fitting model with the lowest lag-1 correlation, while Naive has the highest correlation.
+
+Overall, Moving Average is the best model that outstands all other models in accuracy measures.
+
+
+## 10. Conclusion
+- Summary of analysis : Over the analyzed period, the time series data shows a general upward/downward trend. Also it reveals a seasonal pattern, which exists but not significant.
+ In conclusion, this data doesn't have too drastic changes and follows some regular patterns, and it makes MA the best fitting model. 
+
+```{r}
+MA6_fc_2y = forecast(MA6,h=24)
+MA6_fc_2y
+plot(MA6_fc_2y)
+```
+
+- MA method says that the value will be stable over the 2 years with a slight downward trends. 
+
+- Rank : 1.MA / 2. ARIMA / 3. Simple Smoothing / 4. Holt-Winters / 5. Naive
+
+- Most of the methods showed better accuracy measure than Naive. So Naive is the last place.
+
+- Moving Average surpassed all the other methods in terms of every accuracy measures except for ACF1. So this is the number one rank.
+
+- Next is ARIMA, based on the accuracy measures.
